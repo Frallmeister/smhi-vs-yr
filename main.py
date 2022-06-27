@@ -1,11 +1,14 @@
+import uuid
 import time
+import datetime
 import sys
 import json
 import requests
+import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, Forecast, Observation
+from models import Base, MetData
 
 COORDINATES = {'lat': '57.7088', 'lon': '11.9745'}
 DB_URL = "sqlite:///weather_data.db"
@@ -17,6 +20,9 @@ Session = sessionmaker(engine)
 
 
 def read_sql_to_pandas(table_name):
+    """
+
+    """
     return pd.read_sql_table(table_name=table_name, con=DB_URL)
 
 
@@ -51,65 +57,107 @@ def get_smhi_observation():
     return r
 
 
-def parse_cloud_area(value):
+def process_yr_forecast(data: dict) -> list:
+    """
+    Parse the raw YR forecast into a format suitable for inserting in the DB.
+
+    Returns a list of dictionaries with the following fields:
+        - parameter: Name of forecasted property (STRING)
+        - value: The value of the (STRING)
+        - unit: 
+        - valid_time:
     """
 
+    processed_data = list()
+    
+    meta = data['properties']['meta']
+    units = meta['units']
+
+    timeseries = data['properties']['timeseries']
+    for record in timeseries:
+        valid_time = datetime.datetime.strptime(record['time'], "%Y-%m-%dT%H:%M:%SZ")
+        if valid_time.hour % 6 == 0:
+            details = record['data']['instant']['details']
+            for parameter, value in details.items():
+                item = dict(
+                    parameter=parameter,
+                    value=value,
+                    unit=units[parameter],
+                    valid_time=valid_time,
+                )
+                processed_data.append(item)
+
+            
+            if 'next_6_hours' in record['data'].keys():
+                details = record['data']['next_6_hours']['details']
+                for parameter, value in details.items():
+                    item = dict(
+                        parameter=parameter,
+                        value=value,
+                        unit=units[parameter],
+                        valid_time=valid_time,
+                    )
+                    processed_data.append(item)
+    return processed_data
+                
+
+def process_smhi_forecast(data: dict) -> dict:
+    """
+    Parse the raw SMHI forecast into a dict that matches the DB table
     """
     pass
 
 
-def parameters():
-    results = {}
-    url = "https://opendata-download-metobs.smhi.se/api/version/latest/parameter/{}/station/72420/period/latest-hour/data.json"
-    # for i in [1, 3, 4, 6, 7, 9, 12, 13, 14, 21, 25, 26, 27, 38, 39]:
-    print(url)
-    for i in range(40):
-        r = requests.get(url.format(i))
-        if r.ok:
-            data = r.json()
-            name = data['parameter']['name']
-            summary = data['parameter']['summary']
-            unit = data['parameter']['unit']
-            results[i] = {'name': name, 'summary': summary, 'unit': unit}
-            print(i, " | ", name, " | ", summary)
-        time.sleep(1)
-        # print(i, r.ok)
-    return results
+def insert_data(payload: list, upload_id: str, retrieved_time: np.datetime64, variant: str, source: str):
+    """
+    Insert data in the database
+    """
+
+    with Session() as session:
+        for record in payload:
+            record['upload_id'] = upload_id
+            record['retrieved_time'] = retrieved_time
+            record['variant'] = variant
+            record['source'] = source
+            item = MetData(**record)
+            session.add(item)
+        session.commit()
 
 
+def save_forecast():
+    """
+    Get forecasts from YR and SMHI and save them in the database
+    """
 
+    upload_id = str(uuid.uuid4())
+    retrieved_time = datetime.datetime.utcnow()
+    
+    yr_raw = get_yr_forecast()
+    yr_processed = process_yr_forecast(yr_raw)
+    insert_data(
+        payload=yr_processed,
+        upload_id=upload_id,
+        retrieved_time=retrieved_time,
+        variant="forecast",
+        source="YR"
+        )
+
+
+def save_observation():
+    """
+    Get observation data from SMHI and save it in the database
+    """
+    pass
 
 
 def main():
-
-    # Get YR forecast
-    # yr_data = get_yr_forecast()
-    # with open("yr_response.json", "w") as f:
-    #     json.dump(yr_data, f, indent=2)
-
-    # Get SMHI forecast
-    # smhi_data = get_smhi_forecast()
-    # with open("smhi_response.json", "w") as f:
-    #     json.dump(smhi_data, f, indent=2)
-
-    df = read_sql_to_pandas("observation")
-    return df
+    save_forecast()
 
 if __name__== '__main__':
-    out = main()
+    # main()
+
     with open("smhi_response.json") as f:
-        data = json.load(f)
-    ts = data['timeSeries']
-
-
-    # summary = {
-    #     "name": set(),
-    #     "levelType": set(),
-    #     "level": set(),
-    #     "unit": set()
-    #     }
-    # for d in ts:
-    #     params = d['parameters']
-    #     for param in params:
-    #         for k in summary.keys():
-    #             summary[k].add(param[k])
+        smhi = json.load(f)
+    
+    with open("yr_response.json") as f:
+        yr = json.load(f)
