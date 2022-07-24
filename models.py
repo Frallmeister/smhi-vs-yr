@@ -13,7 +13,7 @@ class MetData(Base):
     id = Column(Integer, primary_key=True)
     upload_id = Column(String, nullable=False)
     parameter = Column(String, nullable=False)
-    value = Column(String, nullable=False)
+    value = Column(String, nullable=True)
     unit = Column(String, nullable=False)
     valid_time = Column(DateTime, nullable=False)
     retrieved_time = Column(DateTime, nullable=False)

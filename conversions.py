@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 SMHI_NAMES = {
     "msl": "air_pressure_at_sea_level",
     "t": "air_temperature",
@@ -19,3 +21,30 @@ SMHI_NAMES = {
     "pmedian": "percipitation_median",
     "Wsymb2": "wsymb2",
 }
+
+params = namedtuple("parameters", ["parameter", "station", "summary"])
+PARAM_STATIONS = [
+    params("1", "71420", "air_temperature"),
+    params("3", "71420", "wind_from_direction"),
+    params("4", "71420", "wind_speed"),
+    params("6", "71420", "relative_humidity"),
+    params("7", "71420", "percipitation_amount"),
+    params("9", "71420", "air_pressure_at_sea_level"),
+    params("12", "71420", "horizontal_visibility"),
+    params("13", "71420", "current_weather"),
+    # params("14", "71420", "horizontal_visibility"),
+    params("21", "71420", "wind_speed_of_gust"),
+    params("25", "71420", "wind_speed_max_of_18_means"),
+    params("26", "71420", "air_temperature_min"),
+    params("27", "71420", "air_temperature_max"),
+    params("28", "72420", "cloud_base_first"),
+    params("29", "72420", "cloud_area_fraction_first"),
+    params("30", "72420", "cloud_base_second"),
+    params("31", "72420", "cloud_area_fraction_second"),
+    params("32", "72420", "cloud_base_third"),
+    params("33", "72420", "cloud_area_fraction_third"),
+    params("34", "72420", "cloud_base_fourth"),
+    params("35", "72420", "cloud_area_fraction_fourth"),
+    params("38", "71420", "percipitation_intensity"),
+    params("39", "71420", "dew_point_temperature"),
+]

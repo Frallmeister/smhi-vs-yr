@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, MetData
-from conversions import SMHI_NAMES
+from conversions import SMHI_NAMES, PARAM_STATIONS
 
 COORDINATES = {'lat': '57.7088', 'lon': '11.9745'}
 DB_URL = "sqlite:///weather_data.db"
@@ -53,12 +53,28 @@ def get_smhi_forecast():
 
 
 def get_smhi_observation():
-    station_number = 71420
     entry_point = "https://opendata-download-metobs.smhi.se/api/"
-    query = f"version/latest/station/{station_number}/period/latest-hour/data.json"
+    query = "version/latest/parameter/{}/station/{}/period/latest-hour/data.json"
 
-    r = requests.get(entry_point + query)
-    return r
+    observations = list()
+    for param, station, summary in PARAM_STATIONS:
+        r = requests.get(entry_point + query.format(param, station))
+        data = r.json()
+
+        parameter = summary
+        unit = data['parameter']['unit']
+        value = None if data['value'] is None else data['value'][0]['value']
+        date_updated = data['updated']
+        valid_time = datetime.datetime.fromtimestamp(int(date_updated / 1000))
+        observation = dict(
+            parameter=parameter,
+            value=value,
+            unit=unit,
+            valid_time=valid_time,
+        )
+        observations.append(observation)
+
+    return observations
 
 
 def process_yr_forecast(data: dict) -> list:
@@ -151,7 +167,7 @@ def insert_data(payload: list, upload_id: str, retrieved_time: np.datetime64, va
         session.commit()
 
 
-def save_forecast(payload: list, variant: str, source: str):
+def save_data(payload: list, variant: str, source: str):
     """
     Get forecasts from YR and SMHI and save them in the database
 
@@ -173,36 +189,34 @@ def save_forecast(payload: list, variant: str, source: str):
         )
 
 
-def save_observation():
-    """
-    Get observation data from SMHI and save it in the database
-    """
-    pass
-
-
 def main():
 
     # Retrieve, parse and save YR forecast data
     yr_raw = get_yr_forecast()
     yr_processed = process_yr_forecast(yr_raw)
-    save_forecast(payload=yr_processed, variant="forecast", source="YR")
+    save_data(payload=yr_processed, variant="forecast", source="YR")
 
     # Retrieve, parse and save SMHI forecast data
     smhi_raw = get_smhi_forecast()
     smhi_processed = process_smhi_forecast(smhi_raw)
-    save_forecast(payload=smhi_processed, variant="forecast", source="SMHI")
+    save_data(payload=smhi_processed, variant="forecast", source="SMHI")
 
     # Retrieve, parse and save SMHI observation data
+    observations = get_smhi_observation()
+    save_data(payload=observations, variant="observation", source="SMHI")
+    return yr_processed, smhi_processed, observations
+
 
 if __name__== '__main__':
-    # main()
+    yr, smhi, obs = main()
 
-    with open("smhi_response.json") as f:
-        smhi = json.load(f)
+    # with open("smhi_response.json") as f:
+    #     smhi = json.load(f)
     
-    with open("yr_response.json") as f:
-        yr = json.load(f)
+    # with open("yr_response.json") as f:
+    #     yr = json.load(f)
     
-    yr_processed = process_yr_forecast(yr)
-    smhi = get_smhi_forecast()
-    smhip = process_smhi_forecast(smhi)
+    # yr_processed = process_yr_forecast(yr)
+    # # smhi = get_smhi_forecast()
+    # smhip = process_smhi_forecast(smhi)
+    # obs = get_smhi_observation()
