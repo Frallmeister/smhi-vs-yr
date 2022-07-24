@@ -9,10 +9,10 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, MetData
+from conversions import SMHI_NAMES
 
 COORDINATES = {'lat': '57.7088', 'lon': '11.9745'}
 DB_URL = "sqlite:///weather_data.db"
-
 
 engine = create_engine(DB_URL, echo=False, future=True)
 Base.metadata.create_all(engine)
@@ -39,6 +39,10 @@ def get_yr_forecast():
 
 
 def get_smhi_forecast():
+    """
+    Retrieve forecast data from SMHI via their API
+    """
+
     lon = COORDINATES['lon']
     lat = COORDINATES['lat']
     entry_point = "https://opendata-download-metfcst.smhi.se"
@@ -105,12 +109,35 @@ def process_smhi_forecast(data: dict) -> dict:
     """
     Parse the raw SMHI forecast into a dict that matches the DB table
     """
-    pass
+    
+    processed_data = list()
+    timeseries = data['timeSeries']
+    for forecast in timeseries:
+        valid_time = forecast['validTime']
+        parameters = forecast['parameters']
+        valid_time = datetime.datetime.strptime(valid_time, "%Y-%m-%dT%H:%M:%SZ")
+        if valid_time.hour % 6 == 0:
+            for parameter in parameters:
+                mapped_param = SMHI_NAMES[parameter['name']]
+                item = dict(
+                    parameter=mapped_param,
+                    value=parameter['values'][0],
+                    unit=parameter['unit'],
+                    valid_time=valid_time,
+                )
+            processed_data.append(item)
+    return processed_data
 
 
 def insert_data(payload: list, upload_id: str, retrieved_time: np.datetime64, variant: str, source: str):
     """
     Insert data in the database
+    Args:
+        payload: Data to insert.
+        upload_id: A unique identifier
+        retrieved_time: Datetime
+        variant: 'forecast' or 'observation'.
+        source: 'YR' or 'SMHI'
     """
 
     with Session() as session:
@@ -124,22 +151,25 @@ def insert_data(payload: list, upload_id: str, retrieved_time: np.datetime64, va
         session.commit()
 
 
-def save_forecast():
+def save_forecast(payload: list, variant: str, source: str):
     """
     Get forecasts from YR and SMHI and save them in the database
+
+    Arguments:
+        payload: List with processed weather data.
+        variant: Either "forecast" or "observation".
+        source: Either "SMHI" or "YR".
     """
 
     upload_id = str(uuid.uuid4())
     retrieved_time = datetime.datetime.utcnow()
     
-    yr_raw = get_yr_forecast()
-    yr_processed = process_yr_forecast(yr_raw)
     insert_data(
-        payload=yr_processed,
+        payload=payload,
         upload_id=upload_id,
         retrieved_time=retrieved_time,
-        variant="forecast",
-        source="YR"
+        variant=variant,
+        source=source
         )
 
 
@@ -151,7 +181,18 @@ def save_observation():
 
 
 def main():
-    save_forecast()
+
+    # Retrieve, parse and save YR forecast data
+    yr_raw = get_yr_forecast()
+    yr_processed = process_yr_forecast(yr_raw)
+    save_forecast(payload=yr_processed, variant="forecast", source="YR")
+
+    # Retrieve, parse and save SMHI forecast data
+    smhi_raw = get_smhi_forecast()
+    smhi_processed = process_smhi_forecast(smhi_raw)
+    save_forecast(payload=smhi_processed, variant="forecast", source="SMHI")
+
+    # Retrieve, parse and save SMHI observation data
 
 if __name__== '__main__':
     # main()
@@ -161,3 +202,7 @@ if __name__== '__main__':
     
     with open("yr_response.json") as f:
         yr = json.load(f)
+    
+    yr_processed = process_yr_forecast(yr)
+    smhi = get_smhi_forecast()
+    smhip = process_smhi_forecast(smhi)
