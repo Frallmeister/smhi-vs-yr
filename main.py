@@ -1,3 +1,4 @@
+import logging
 import uuid
 import time
 import datetime
@@ -10,6 +11,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, MetData
 from conversions import SMHI_NAMES, PARAM_STATIONS
+from log import configure_logging
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 COORDINATES = {'lat': '57.7088', 'lon': '11.9745'}
 DB_URL = "sqlite:///weather_data.db"
@@ -23,6 +28,7 @@ def read_sql_to_pandas(table_name):
     """
 
     """
+    logger.info("RUNNING: read_sql_to_pandas('%s')", table_name)
     return pd.read_sql_table(table_name=table_name, con=DB_URL)
 
 
@@ -31,6 +37,7 @@ def get_yr_forecast():
     Retrieve forecast data from YR via their API
     """
 
+    logger.info("RUNNING: get_yr_forecast()")
     url = f"https://api.met.no/weatherapi/locationforecast/2.0/complete"
     headers = {'User-Agent': 'https://github.com/Frallmeister'}
 
@@ -43,6 +50,7 @@ def get_smhi_forecast():
     Retrieve forecast data from SMHI via their API
     """
 
+    logger.info("RUNNING: get_smhi_forecast()")
     lon = COORDINATES['lon']
     lat = COORDINATES['lat']
     entry_point = "https://opendata-download-metfcst.smhi.se"
@@ -53,11 +61,14 @@ def get_smhi_forecast():
 
 
 def get_smhi_observation():
+
+    logger.info("RUNNING: get_smhi_observation()")
     entry_point = "https://opendata-download-metobs.smhi.se/api/"
     query = "version/latest/parameter/{}/station/{}/period/latest-hour/data.json"
 
     observations = list()
     for param, station, summary in PARAM_STATIONS:
+        logger.debug("param=%s, station=%s, summary=%s", param, station, summary)
         r = requests.get(entry_point + query.format(param, station))
         data = r.json()
 
@@ -88,6 +99,7 @@ def process_yr_forecast(data: dict) -> list:
         - valid_time:
     """
 
+    logger.info("RUNNING: process_yr_forecast()")
     processed_data = list()
     
     meta = data['properties']['meta']
@@ -126,6 +138,7 @@ def process_smhi_forecast(data: dict) -> dict:
     Parse the raw SMHI forecast into a dict that matches the DB table
     """
     
+    logger.info("RUNNING: process_smhi_forecast()")
     processed_data = list()
     timeseries = data['timeSeries']
     for forecast in timeseries:
@@ -156,6 +169,7 @@ def insert_data(payload: list, upload_id: str, retrieved_time: np.datetime64, va
         source: 'YR' or 'SMHI'
     """
 
+    logger.info("RUNNING: insert_data()")
     with Session() as session:
         for record in payload:
             record['upload_id'] = upload_id
@@ -177,6 +191,7 @@ def save_data(payload: list, variant: str, source: str):
         source: Either "SMHI" or "YR".
     """
 
+    logger.info("RUNNING: save_data()")
     upload_id = str(uuid.uuid4())
     retrieved_time = datetime.datetime.utcnow()
     
@@ -190,25 +205,32 @@ def save_data(payload: list, variant: str, source: str):
 
 
 def main():
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logger.info("\n\n###### Running main() ######")
+    logger.info("Current time: %s", current_time)
 
     # Retrieve, parse and save YR forecast data
+    logger.info("GET YR forecast")
     yr_raw = get_yr_forecast()
     yr_processed = process_yr_forecast(yr_raw)
     save_data(payload=yr_processed, variant="forecast", source="YR")
 
     # Retrieve, parse and save SMHI forecast data
+    logger.info("GET SMHI forecast")
     smhi_raw = get_smhi_forecast()
     smhi_processed = process_smhi_forecast(smhi_raw)
     save_data(payload=smhi_processed, variant="forecast", source="SMHI")
 
     # Retrieve, parse and save SMHI observation data
+    logger.info("GET SMHI observations")
     observations = get_smhi_observation()
     save_data(payload=observations, variant="observation", source="SMHI")
     return yr_processed, smhi_processed, observations
 
 
 if __name__== '__main__':
-    yr, smhi, obs = main()
+    pass
+    # yr, smhi, obs = main()
 
     # with open("smhi_response.json") as f:
     #     smhi = json.load(f)
