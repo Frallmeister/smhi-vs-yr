@@ -14,6 +14,7 @@ from conversions import SMHI_NAMES, PARAM_STATIONS
 from log import configure_logging
 
 import http.client as http_client
+http_client.HTTPConnection.debuglevel = 1
 configure_logging()
 logger = logging.getLogger(__name__)
 logger.propagate = True
@@ -92,6 +93,7 @@ def get_smhi_observation():
             valid_time=valid_time,
         )
         observations.append(observation)
+        time.sleep(1)
 
     return observations
 
