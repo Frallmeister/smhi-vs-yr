@@ -229,16 +229,4 @@ def main():
 
 
 if __name__== '__main__':
-    pass
-    # yr, smhi, obs = main()
-
-    # with open("smhi_response.json") as f:
-    #     smhi = json.load(f)
-    
-    # with open("yr_response.json") as f:
-    #     yr = json.load(f)
-    
-    # yr_processed = process_yr_forecast(yr)
-    # # smhi = get_smhi_forecast()
-    # smhip = process_smhi_forecast(smhi)
-    # obs = get_smhi_observation()
+    main()
