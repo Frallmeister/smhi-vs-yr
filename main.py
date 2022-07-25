@@ -193,7 +193,7 @@ def save_data(payload: list, variant: str, source: str):
 
     logger.info("RUNNING: save_data()")
     upload_id = str(uuid.uuid4())
-    retrieved_time = datetime.datetime.utcnow()
+    retrieved_time = datetime.datetime.now()
     
     insert_data(
         payload=payload,
