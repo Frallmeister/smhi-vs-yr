@@ -13,8 +13,10 @@ from models import Base, MetData
 from conversions import SMHI_NAMES, PARAM_STATIONS
 from log import configure_logging
 
+import http.client as http_client
 configure_logging()
 logger = logging.getLogger(__name__)
+logger.propagate = True
 
 COORDINATES = {'lat': '57.7088', 'lon': '11.9745'}
 DB_URL = "sqlite:///weather_data.db"
@@ -56,7 +58,13 @@ def get_smhi_forecast():
     entry_point = "https://opendata-download-metfcst.smhi.se"
     url = f"/api/category/pmp3g/version/2/geotype/point/lon/{lon}/lat/{lat}/data.json"
 
-    r = requests.get(entry_point + url)
+    headers = {
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+    }
+
+    r = requests.get(entry_point + url, headers=headers)
     return r.json()
 
 
