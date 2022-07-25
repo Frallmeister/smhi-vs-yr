@@ -78,7 +78,11 @@ def get_smhi_observation():
     observations = list()
     for param, station, summary in PARAM_STATIONS:
         logger.debug("param=%s, station=%s, summary=%s", param, station, summary)
-        r = requests.get(entry_point + query.format(param, station))
+        try:
+            r = requests.get(entry_point + query.format(param, station), timeout=120)
+        except requests.exceptions.Timeout:
+            logger.error("SMHI server did not respond")
+            continue
         data = r.json()
 
         parameter = summary
